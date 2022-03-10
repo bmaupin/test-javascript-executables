@@ -1,0 +1,11 @@
+{
+  "name": "test-pkg",
+  "version": "0.0.1",
+  "description": "",
+  "bin": "app.js",
+  "scripts": {
+    "build": ""
+  },
+  "author": "",
+  "license": "MIT"
+}
