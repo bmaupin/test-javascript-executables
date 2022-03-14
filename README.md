@@ -1,18 +1,20 @@
-Testing various methods for packaging node apps as native binaries:
+Testing various methods for packaging node apps into self-contained executables:
 
-| Method                                                              | Node version | Linux binary size | Time to execute |
-| ------------------------------------------------------------------- | ------------ | ----------------- | --------------- |
-| `npx pkg .`                                                         | 14           | 37 MB             | 0m0.042s        |
-| `npx pkg --compress GZip .`                                         | 14           | 37 MB             | 0m0.042s        |
-| `npx nexe app.js --build`¹                                          | 14           | 75 MB             | 0m0.054s        |
-| `npx nexe app.js --build` (using `strip` and `upx` as below)        | 14           | 23 MB             | 0m0.250s        |
-| 👉 `npx nexe app.js --build` (with `small-icu`, `strip`, and `upx`) | 14           | 14 MB             | 0m0.183s        |
-| `deno compile app.js`²                                              | N/A          | 84 MB             | 0m0.026s        |
+| Method                                                                | Runtime version | Linux binary size | Time to execute |
+| --------------------------------------------------------------------- | --------------- | ----------------- | --------------- |
+| `npx pkg .`                                                           | Node 14.18.2    | 37 MB             | 0m0.042s        |
+| `npx pkg --compress GZip .`¹                                          | Node 14.18.2    | 37 MB             | 0m0.042s        |
+| `npx nexe app.js --build`²                                            | Node 14.18.2    | 75 MB             | 0m0.054s        |
+| `npx nexe app.js --build` (with `strip` and `upx`)                    | Node 14.18.2    | 23 MB             | 0m0.250s        |
+| `npx nexe app.js --build` (with `small-icu`, `strip`, and `upx`)      | Node 14.18.2    | 14 MB             | 0m0.183s        |
+| `npx nexe app.js --build` (with `--without-intl`, `strip`, and `upx`) | Node 14.18.2    | 11 MB             | 0m0.154s        |
+| `deno compile app.js`³                                                | Deno 1.19.3     | 84 MB             | 0m0.026s        |
 
 Notes:
 
+1. `pkg --compress` only compresses the JavaScript source, so it has little impact on our hello world test code
 1. `nexe` additionally took 30+ minutes for the first build because it had to compile Node.js
-1. Using Deno 1.19.3; Deno used to have a `compile --lite` option, but unfortunately it was removed: [https://github.com/denoland/deno/issues/10507](https://github.com/denoland/deno/issues/10507)
+1. Deno used to have a `compile --lite` option, but unfortunately it was removed: [https://github.com/denoland/deno/issues/10507](https://github.com/denoland/deno/issues/10507)
 
 #### Strip debugging symbols
 
@@ -26,6 +28,7 @@ Debugging symbols could be stripped from the Node/Deno binaries in the case wher
 
 - `nexe` works with `upx`; see below
 - `pkg` does not work with `upx` ([https://github.com/vercel/pkg/issues/50](https://github.com/vercel/pkg/issues/50))
+- Deno may work with `upx`; see [https://github.com/denoland/deno/issues/986#issuecomment-742041812](https://github.com/denoland/deno/issues/986#issuecomment-742041812)
 
 #### Node builds with smaller/no ICU support
 
@@ -33,9 +36,15 @@ Debugging symbols could be stripped from the Node/Deno binaries in the case wher
 
 Size comparisons for Node binary (using Node v14.18.2):
 
-- Default build: 75 MB
+- Default build (will full ICU): 75 MB
+  - Stripped: 65 MB
+  - Stripped with `upx`: 22 MB
 - With small ICU (`--with-intl=small-icu`): 51 MB
-- Without Intl support (`--without-intl`): TODO
+  - Stripped: 41 MB
+  - Stripped with `upx`: 14 MB
+- Without Intl support (`--without-intl`): 40 MB
+  - Stripped: 32 MB
+  - Stripped with `upx`: 11 MB
 
 #### Bundled JS instead of native binary
 
@@ -48,7 +57,7 @@ Hello world
 
 #### Getting the smallest binary size possible with `nexe`
 
-1. Make sure `python` links to Python 3 (this is required to use a smaller ICU when compiling Node)
+1. Make sure `python` links to Python 3 (this is required by the Node compiler so it can call icutrim.py to use a smaller ICU)
 
    ```
    sudo apt install python-is-python3
