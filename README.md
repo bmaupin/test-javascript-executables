@@ -48,10 +48,19 @@ Size comparisons for Node binary (using Node v14.18.2):
 
 #### Bundled JS instead of native binary
 
-For large applications, a 20+ MB binary won't make much of a difference. Where size is an issue, we could just use a JS bundler to bundle/minimize the code into a single JS file, then add a shebang to the top, and require Node; see [app](app) as an example of doing this; it can be run as a normal shell executable:
+For large applications, a 10+ MB binary won't make much of a difference. Where size is an issue, we could just use a JS bundler to bundle the application with its dependencies into a single JS file, then add a shebang at the top, e.g.:
+
+```javascript
+#!/usr/bin/env node
+
+console.log('Hello world');
+```
+
+As long as the end user has Node.js installed, they can just run the bundled JS directly:
 
 ```
-$ ./app
+$. chmod +x app.js
+$ ./app.js
 Hello world
 ```
 
