@@ -1,95 +1,39 @@
-Testing various methods for packaging node apps into self-contained executables:
+Testing various methods for packaging Node.js apps into self-contained executables
 
-| Method                                                                | Runtime version | Linux binary size | Time to execute |
-| --------------------------------------------------------------------- | --------------- | ----------------- | --------------- |
-| `npx pkg .`                                                           | Node 14.18.2    | 37 MB             | 0m0.042s        |
-| `npx pkg --compress GZip .`¹                                          | Node 14.18.2    | 37 MB             | 0m0.042s        |
-| `npx nexe app.js --build`²                                            | Node 14.18.2    | 75 MB             | 0m0.054s        |
-| `npx nexe app.js --build` (with `strip` and `upx`)                    | Node 14.18.2    | 23 MB             | 0m0.250s        |
-| `npx nexe app.js --build` (with `small-icu`, `strip`, and `upx`)      | Node 14.18.2    | 14 MB             | 0m0.183s        |
-| `npx nexe app.js --build` (with `--without-intl`, `strip`, and `upx`) | Node 14.18.2    | 11 MB             | 0m0.154s        |
-| `deno compile app.js`³                                                | Deno 1.19.3     | 84 MB             | 0m0.026s        |
+## Packaging your Node.js application into a self-contained executable
 
-Notes:
+#### (Recommended) For the smallest binary, use `nexe`
 
-1. `pkg --compress` only compresses the JavaScript source, so it has little impact on our hello world test code
-1. `nexe` additionally took 30+ minutes for the first build because it had to compile Node.js
-1. Deno used to have a `compile --lite` option, but unfortunately it was removed: [https://github.com/denoland/deno/issues/10507](https://github.com/denoland/deno/issues/10507)
+Out of all the tools I tested, [`nexe`](https://github.com/nexe/nexe) has the most flexibility and can produce the smallest binaries. See below for more details.
 
-#### Strip debugging symbols
+ⓘ Most of the steps here are optional; adjust them to suit your needs
 
-Debugging symbols could be stripped from the Node/Deno binaries in the case where native modules aren't needed
+1. Figure out which version of Node.js to use
 
-- This helps `nexe` (see below) and Deno (see [here](https://github.com/denoland/deno/issues/9198#issuecomment-764007074)) somewhat, but doesn't seem to have any affect with `pkg`
+   ⚠ Using an older version of Node.js can be a security risk
 
-#### `upx`
+   Older versions of Node.js are much smaller (see below). Depending how large your code is and what features you're using, you could try using an older version of Node and/or transpiling your code.
 
-[`upx`](https://upx.github.io/) can be used to reduce the size of binaries at a small (~1 second) startup cost
+   For TypeScript, you can use this to target older versions of Node.js: [Node Target Mapping](https://github.com/microsoft/TypeScript/wiki/Node-Target-Mapping)
 
-- `nexe` works with `upx`; see below
-- `pkg` does not work with `upx` ([https://github.com/vercel/pkg/issues/50](https://github.com/vercel/pkg/issues/50))
-- Deno may work with `upx`; see [https://github.com/denoland/deno/issues/986#issuecomment-742041812](https://github.com/denoland/deno/issues/986#issuecomment-742041812)
+1. Bundle your code to take advantage of tree shaking, minification, etc.
 
-#### Node builds with smaller/no ICU support
+   Common bundlers include [Vite](https://vitejs.dev/), [Parcel](https://parceljs.org/), [Rollup](https://rollupjs.org/), [webpack](https://webpack.js.org/)
 
-[https://github.com/nodejs/node/blob/master/BUILDING.md#intl-ecma-402-support](https://github.com/nodejs/node/blob/master/BUILDING.md#intl-ecma-402-support)
+1. Build Node.js
 
-Size comparisons for Node binary (using Node v14.18.2):
-
-- Default build (will full ICU): 75 MB
-  - Stripped: 65 MB
-  - Stripped with `upx`: 22 MB
-- With small ICU (`--with-intl=small-icu`): 51 MB
-  - Stripped: 41 MB
-  - Stripped with `upx`: 14 MB
-- Without Intl support (`--without-intl`): 40 MB
-  - Stripped: 32 MB
-  - Stripped with `upx`: 11 MB
-
-#### Bundled JS instead of native binary
-
-For large applications, a 10+ MB binary won't make much of a difference. Where size is an issue, we could just use a JS bundler to bundle the application with its dependencies into a single JS file, then add a shebang at the top, e.g.:
-
-```javascript
-#!/usr/bin/env node
-
-console.log('Hello world');
-```
-
-As long as the end user has Node.js installed, they can just run the bundled JS directly:
-
-```
-$. chmod +x app.js
-$ ./app.js
-Hello world
-```
-
-#### Getting the smallest binary size possible with `nexe`
-
-1. Make sure `python` links to Python 3 (this is required by the Node compiler so it can call icutrim.py to use a smaller ICU)
+   For example, to build Node.js with small ICU (see below for more options):
 
    ```
-   sudo apt install python-is-python3
+   npx nexe app.js --build --configure=--with-intl=small-icu --make=-j4 --python=$(which python3) --verbose
    ```
 
-1. Run `npx nexe app.js --build --configure='--with-intl=small-icu' --verbose` to build Node with small ICU
+   (`--python=$(which python3)` uses Python 3, which is required for newer versions of Node)
 
-   - Replace `--with-intl=small-icu` with `--without-intl` for an even smaller Node binary
-
-     > The Intl object will not be available, nor some other APIs such as String.normalize.
-
-     ([https://github.com/nodejs/node/blob/master/BUILDING.md#building-without-intl-support](https://github.com/nodejs/node/blob/master/BUILDING.md#building-without-intl-support))
-
-1. Go to the Nexe node binary directory
+1. (Optional) Make a copy of the Node binary, e.g.
 
    ```
-   cd ~/.nexe/14.18.2/out/Release
-   ```
-
-1. Make a copy of the Node binary
-
-   ```
-   cp node node.bak
+   cp ~/.nexe/16.14.1/out/Release/node ~/.nexe/16.14.1/out/Release/node.bak
    ```
 
 1. Strip debugging symbols
@@ -97,13 +41,128 @@ Hello world
    ⚠ Only do this if you're not using any native modules, as the debugging symobols are required for native modules
 
    ```
-   strip node
+   strip ~/.nexe/16.14.1/out/Release/node
    ```
 
-1. Run [`upx`](https://upx.github.io/) on the node binary
+1. Run [`upx`](https://upx.github.io/) on the node binary, e.g.
 
    ```
-   upx node
+   upx ~/.nexe/16.14.1/out/Release/node
    ```
 
-After that, using `npx nexe --build` should use the stripped/compressed Node binary
+1. Now run `npx nexe --build` one more time to package your application using the smaller Node binary, e.g.
+
+   ```
+   npx nexe app.js --build
+   ```
+
+#### Run `nexe` using Docker
+
+This project has a sample [`Dockerfile`](Dockerfile) you can optionally use, e.g.
+
+```
+$ docker build . -t nexe
+
+$ docker run --rm -v "$PWD:/build" nexe sh -c "cd /build; nexe app.js --build"
+
+$ ls -lh app
+-rwxr-xr-x 1 root root 14M Mar 16 13:25 app
+```
+
+#### For ease-of-use, use `pkg`
+
+[`pkg`](https://github.com/vercel/pkg) doesn't work with `strip` or `upx`, so isn't able to produce the smallest binaries. But it has more versions of Node precompiled (meaning you probably won't need to compile it yourself) and cross-compiles by default out-of-the-box, e.g.
+
+```
+$ npx pkg app.js
+$ ls -1
+app.js
+app-linux
+app-macos
+app-win.exe
+```
+
+## More details
+
+#### Comparing different tools and methods
+
+| Method                                                                | Runtime version | Linux binary size | Time to execute |
+| --------------------------------------------------------------------- | --------------- | ----------------- | --------------- |
+| `npx pkg .`                                                           | Node 14.18.2    | 37 MB             | 0m0.042s        |
+| `npx pkg --compress GZip .`¹                                          | Node 14.18.2    | 37 MB             | 0m0.042s        |
+| `npx nexe app.js --build`                                             | Node 14.18.2    | 75 MB             | 0m0.054s        |
+| `npx nexe app.js --build` (with `strip` and `upx`)                    | Node 14.18.2    | 23 MB             | 0m0.250s        |
+| `npx nexe app.js --build` (with `small-icu`, `strip`, and `upx`)      | Node 14.18.2    | 14 MB             | 0m0.183s        |
+| `npx nexe app.js --build` (with `--without-intl`, `strip`, and `upx`) | Node 14.18.2    | 11 MB             | 0m0.154s        |
+| `deno compile app.js`²                                                | Deno 1.19.3     | 84 MB             | 0m0.026s        |
+
+Notes:
+
+1. `pkg --compress` only compresses the JavaScript source, so it has little impact on our hello world test code
+1. Deno used to have a `compile --lite` option, but unfortunately it was removed: [https://github.com/denoland/deno/issues/10507](https://github.com/denoland/deno/issues/10507)
+
+#### Comparing different versions of Node.js
+
+| Version | Full size of Node | `--without-intl`, `strip`, `upx` |
+| ------- | ----------------- | -------------------------------- |
+| 16.14.0 | 79 MB             | 14 MB                            |
+| 14.18.2 | 75 MB             | 11 MB                            |
+| 12.22.0 | 47 MB             | 11 MB                            |
+| 10.24.1 | 40 MB             | 9.4 MB                           |
+| 8.17.0  | 34 MB             | 7.9 MB                           |
+
+**Note:** For Node <= 10, you'll need to use Python 2 to do the build, e.g.
+
+```
+npx nexe app.js --target linux-x64-10.24.1 --build --make=-j4 --python=$(which python2) --verbose
+```
+
+#### Strip debugging symbols
+
+Debugging symbols could be stripped from the Node/Deno binaries in the case where native modules aren't needed
+
+- This works with `nexe` and Deno (see [here](https://github.com/denoland/deno/issues/9198#issuecomment-764007074)), but doesn't seem to have any effect with `pkg`
+
+#### `upx`
+
+[`upx`](https://upx.github.io/) can be used to reduce the size of binaries at a small startup cost (depending on the size of your application)
+
+- `nexe` works with `upx`
+- `pkg` does not work with `upx` ([https://github.com/vercel/pkg/issues/50](https://github.com/vercel/pkg/issues/50))
+- Deno may work with `upx`; see [https://github.com/denoland/deno/issues/986#issuecomment-742041812](https://github.com/denoland/deno/issues/986#issuecomment-742041812)
+
+#### Node builds with smaller/no `Intl` support
+
+See here for implications of the various options: [https://github.com/nodejs/node/blob/master/BUILDING.md#intl-ecma-402-support](https://github.com/nodejs/node/blob/master/BUILDING.md#intl-ecma-402-support)
+
+Size comparisons for Node binary (using Node v14.18.2):
+
+| Build type              | Normal size | Stripped | Stripped and `upx` |
+| ----------------------- | ----------- | -------- | ------------------ |
+| Normal (full ICU)       | 75 MB       | 65 MB    | 22 MB              |
+| `--with-intl=small-icu` | 51 MB       | 41 MB    | 14 MB              |
+| `--without-intl`        | 40 MB       | 32 MB    | 11 MB              |
+
+## Other options
+
+#### Bundled JS instead of self-contained executable
+
+For large applications, a 10+ MB binary won't make much of a difference. If you want something smaller and don't mind requiring users to have Node.js installed in order to run your application, you can use a JS bundler to bundle the application with its dependencies into a single JS file, then add a shebang at the top, e.g.:
+
+```javascript
+#!/usr/bin/env node
+
+console.log('Hello world');
+```
+
+Then users can just run the bundled JS directly:
+
+```
+$ chmod +x app.js
+$ ./app.js
+Hello world
+```
+
+#### QuickJS
+
+If you want the smallest binary possible (e.g. for embedded systems), you probably want use something like [QuickJS](https://bellard.org/quickjs/) instead, but it's slower than Node.js and has its own API, making it incompatible with existing Node.js applications.
