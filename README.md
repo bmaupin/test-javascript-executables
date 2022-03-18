@@ -25,7 +25,7 @@ Out of all the tools I tested, [`nexe`](https://github.com/nexe/nexe) has the mo
    For example, to build Node.js with small ICU (see below for more options):
 
    ```
-   npx nexe app.js --build --configure=--with-intl=small-icu --make=-j4 --python=$(which python3) --verbose
+   npx nexe app.js --build --no-mangle --configure=--with-intl=small-icu --make=-j$(nproc) --python=$(which python3) --verbose
    ```
 
    (`--python=$(which python3)` uses Python 3, which is required for newer versions of Node)
@@ -114,7 +114,7 @@ Notes:
 **Note:** For Node <= 10, you'll need to use Python 2 to do the build, e.g.
 
 ```
-npx nexe app.js --target linux-x64-10.24.1 --build --make=-j4 --python=$(which python2) --verbose
+npx nexe app.js --target linux-x64-10.24.1 --build --no-mangle --make=-j$(nproc) --python=$(which python2) --verbose
 ```
 
 #### Strip debugging symbols

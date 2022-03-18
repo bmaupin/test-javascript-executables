@@ -10,7 +10,7 @@ RUN apt update && \
     #   (https://github.com/nodejs/node/blob/master/BUILDING.md#building-without-intl-support)
     # - You can also specify an exact version of Node:
     #   nexe hello.js --target linux-x64-14.19.0 ...
-    nexe hello.js --build --configure=--without-intl --make=-j4 --python=$(which python3) --verbose && \
+    nexe hello.js --build --no-mangle --configure=--without-intl --make=-j$(nproc) --python=$(which python3) --verbose && \
     # Remove this if you use any native Node.js modules
     strip ~/.nexe/*/out/Release/node && \
     upx ~/.nexe/*/out/Release/node
