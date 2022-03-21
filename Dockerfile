@@ -13,4 +13,4 @@ RUN apt update && \
     nexe hello.js --build --no-mangle --configure=--without-intl --make=-j$(nproc) --python=$(which python3) --verbose && \
     # Remove this if you use any native Node.js modules
     strip ~/.nexe/*/out/Release/node && \
-    upx ~/.nexe/*/out/Release/node
+    upx --lzma ~/.nexe/*/out/Release/node
