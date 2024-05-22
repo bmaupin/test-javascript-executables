@@ -1,8 +1,136 @@
-Testing various methods for packaging Node.js apps into self-contained executables
+Various methods for packaging Node.js apps into self-contained executables
 
-## TL;DR
+## General steps
 
-#### (Recommended) For the smallest binary, use `nexe`
+Here are the high-level steps that will need to be done:
+
+1. Choose a tool to use to create the exectuable (see below)
+1. Apply conversions to the code as needed
+
+   - If you're using Bun or Deno, you may be able to skip this step
+   - Otherwise, a bundler such as [`esbuild`](https://esbuild.github.io/) can probably do everything for you in one step; here are some possible conversions you may need:
+     - Convert from newer JavaScript to support an older version of Node (e.g. if you want a smaller binary)
+     - Convert from TypeScript to JavaScript
+     - Convert from ESM to CommonJS (some tools like `pkg` don't support ESM)
+     - Bundle dependencies
+     - Other transformations (minify, uglify, etc)
+
+1. Package your code into an executable
+
+   - This is where you package your source code into a self-contained executable. How this is done will depend on the tool used.
+
+1. (Optional) Reduce the size of the executable
+   - Tools such as `strip` and `upx` can reduce the size of the executable after it's built, but they don't work in all cases. See below for more information.
+   - Instead of modifying the executable, a simpler option may be to compress it for distribution; 7zip is a common tool with cross-platform support and a great compression ratio.
+
+## Choosing the right tool to use
+
+There are many tools that can package Node.js apps into executables. Which one to choose depends on your needs.
+
+### Official solutions
+
+If your priority is an officially supported solution, many of the JavaScript runtimes now have support for creating executables.
+
+#### Node
+
+Starting with Node 19, support for packaging Node apps into executables has been integrated into Node: [Single executable applications](https://nodejs.org/api/single-executable-applications.html)
+
+- Pros
+  - Official support
+- Cons
+  - No official TypeScript support, but this can easily be handled by a bundler
+  - No ESM support? But this can easily be handled by a bundler
+  - No cross-compilation
+  - Seems to require a lot of manual steps
+
+#### Bun
+
+Bun supports executables out of the box: [Single-file executable](https://bun.sh/docs/bundler/executables)
+
+- Pros
+  - Great solution if you're already using Bun
+  - Supports TypeScript out of the box
+- Cons
+  - Bun doesn't fully support all Node.js APIs
+
+#### Deno
+
+Deno also supports standalone executables out of the box via [`deno compile`](https://docs.deno.com/runtime/manual/tools/compiler)
+
+- Pros
+  - Great solution if you're already using Deno
+  - Seems to support `strip` and `upx` for smaller binaries
+  - Supports TypeScript out of the box
+- Cons
+  - Deno doesn't fully support all Node.js APIs
+
+### Ease of use
+
+#### pkg
+
+[`pkg`](https://github.com/vercel/pkg) is a tool from Vercel that works well out of the box.
+
+- Pros
+  - Easy to use
+  - Supports cross-compilation out of the box (Linux, Mac, Windows)
+  - Has many versions of Node precompiled, so no need to compile them
+- Cons
+  - `pkg` has been retired in favour of the official Node solution. It still works well but won't receive any more updates
+  - Not compatible with `strip` or `upx` so not able to produce the smallest binaries
+  - [Doesn't support ESM](https://github.com/vercel/pkg/issues/1291), but this is fairly easily worked around with a bundler (which you'll probably want to use anyway to bundle dependencies)
+  - No official TypeScript support, but this can easily be handled by a bundler
+
+#### js2bin
+
+[`js2bin`](https://github.com/criblio/js2bin) looks promising although I haven't tested it myself
+
+- Pros
+  - Cross-compilation support
+  - Seems very easy to use
+- Cons
+  - Only has a small number of binaries pre-compiled
+  - No official TypeScript support, but this can easily be handled by a bundler
+
+### Smallest binary
+
+#### nexe
+
+[`nexe`](https://github.com/nexe/nexe) seems to be the most flexible and can result in the smallest binaries
+
+- Pros
+  - Supports `strip` and `upx` to create the smallest possible binary
+  - Now supports cross-compilation (see the nexe documentation)
+- Cons
+  - Fewer pre-compiled versions of Node.js compared to `pkg`
+  - No official TypeScript support, but this can easily be handled by a bundler
+
+## Other options
+
+#### Bundled JS instead of self-contained executable
+
+For large applications, adding 10+ MB to the binary size in order to bundle Node.js won't make much of a difference. If you want something smaller and don't mind requiring users to have Node.js installed in order to run your application, you can use a JS bundler to bundle the application with its dependencies into a single JS file, then add a shebang at the top, e.g.:
+
+```javascript
+#!/usr/bin/env node
+
+console.log('Hello world');
+```
+
+Then users can just run the bundled JS directly:
+
+```
+$ chmod +x app.js
+$ ./app.js
+Hello world
+```
+
+#### QuickJS
+
+If you want the smallest binary possible (e.g. for embedded systems), you probably want use something like [QuickJS](https://bellard.org/quickjs/) instead, but it's slower than Node.js and has its own API, making it incompatible with existing Node.js applications.
+
+## Quick start for building the smallest binary
+
+#### Run `nexe` locally
 
 ⚠ See below for more information on each of these steps, including cost vs. benefit
 
@@ -49,20 +177,7 @@ $ ls -lh app
 -rwxr-xr-x 1 root root 9.8M Mar 16 13:25 app
 ```
 
-#### For ease-of-use, use `pkg`
-
-[`pkg`](https://github.com/vercel/pkg) doesn't work with `strip` or `upx`, so isn't able to produce the smallest binaries. But it has more versions of Node precompiled (meaning you probably won't need to compile it yourself) and cross-compiles by default out-of-the-box, e.g.
-
-```
-$ npx pkg app.js
-$ ls -1
-app.js
-app-linux
-app-macos
-app-win.exe
-```
-
-## More details
+## Detailed test results
 
 #### Optimization 1: Use an older version of Node.js
 
@@ -196,27 +311,3 @@ Notes:
 
 1. `pkg --compress` only compresses the JavaScript source, so it has little impact on our hello world test code
 1. Deno used to have a `compile --lite` option, but unfortunately it was removed: [https://github.com/denoland/deno/issues/10507](https://github.com/denoland/deno/issues/10507)
-
-## Other options
-
-#### Bundled JS instead of self-contained executable
-
-For large applications, adding 10+ MB to the binary size in order to bundle Node.js won't make much of a difference. If you want something smaller and don't mind requiring users to have Node.js installed in order to run your application, you can use a JS bundler to bundle the application with its dependencies into a single JS file, then add a shebang at the top, e.g.:
-
-```javascript
-#!/usr/bin/env node
-
-console.log('Hello world');
-```
-
-Then users can just run the bundled JS directly:
-
-```
-$ chmod +x app.js
-$ ./app.js
-Hello world
-```
-
-#### QuickJS
-
-If you want the smallest binary possible (e.g. for embedded systems), you probably want use something like [QuickJS](https://bellard.org/quickjs/) instead, but it's slower than Node.js and has its own API, making it incompatible with existing Node.js applications.
